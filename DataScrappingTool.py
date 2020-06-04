@@ -2,6 +2,8 @@
 from bs4 import BeautifulSoup
 from urllib.request import urlopen
 import re
+import sqlite3
+from sqlite3.dbapi2 import IntegrityError
 #%%
 class unit():
 
@@ -68,15 +70,60 @@ html = urlopen("https://heroes.thelazy.net//index.php/Template_Editor")
 bs = BeautifulSoup(html.read(),'lxml')
 
 map_objects = []
-pattern = re.compile(r'''<li><a href="[a-z\/A-Z._]{1,}" title="[a-zA-Z ]{1,}">[a-zA-Z ]{1,}<\/a>\n<ul><li>Value: [0-9]{1,}.<\/li>\n''', flags=re.MULTILINE)
+pattern = re.compile(r'''<li>[\w \d.\/_=\"';&%$#<>()]{1,}\n<ul><li>Value: [0-9]{1,}.</li>''', flags=re.MULTILINE)
 map_objects_to_parse = pattern.findall(str(bs.contents[1]))
 
-pattern_value = re.compile(r'''[0-9]{2,5}''', flags=re.MULTILINE)
-pattern_name = re.compile(r'''>[a-zA-z ]{1,}<''', flags=re.MULTILINE)
+pattern_value = re.compile(r'''Value: [0-9]{3,}''', flags=re.MULTILINE)
+pattern_name = re.compile(r'''>[a-zA-z0-9() \n']{1,}<''', flags=re.MULTILINE)
 for object in map_objects_to_parse:
 
-    value = pattern_value.findall(object)[0]
-    name = pattern_name.findall(object)[0][1:-1]
+    value = pattern_value.findall(object)[0].split(' ')[-1]
+    name = pattern_name.findall(object)[0][1:-1].strip()
     map_objects.append(map_object(name,value))
+
+# %%
+
+connection = sqlite3.connect('data.db')
+
+cursor = connection.cursor()
+
+#%%
+#cursor.execute('''CREATE TABLE objects (name VARCHAR(20) PRIMARY KEY, value INT)''')
+cursor.execute('''CREATE TABLE units (name VARCHAR(20) PRIMARY KEY, level INT, Attack INT, Defense INT, minDamage INT, maxDamage INT, Health INT, Speed INT, Growth INT, Value INT)''')
+
+# %%
+query = 'INSERT INTO objects VALUES (?,?)'
+for object in map_objects:
+    name = object.name
+    value = int(object.value)
+    #print(object)
+    try:
+        cursor.execute(query,(name,value))
+        print(object.name + " added")
+    except IntegrityError:
+        print(object.name + " already in database")
+connection.commit()
+#%%
+query = 'INSERT INTO units VALUES (?,?,?,?,?,?,?,?,?,?)'
+for unit in units:
+    name = unit.name
+    level = unit.level
+    attack = unit.attack
+    defense = unit.defense
+    mindmg = unit.min_dmg
+    maxdmg = unit.max_dmg
+    health = unit.health
+    speed = unit.speed
+    growth = unit.growth
+    value = unit.ai_value
+    cursor.execute(query,(name,level,attack,defense,mindmg,maxdmg,health,speed,growth,value))
+connection.commit()
+#%%
+cursor.execute('SELECT name from units')
+rows = cursor.fetchall()
+print([name[0] for name in rows])
+# %%
+cursor.close()
+connection.close()
 
 # %%
