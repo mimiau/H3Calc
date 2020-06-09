@@ -4,6 +4,7 @@ from urllib.request import urlopen
 import re
 import sqlite3
 from sqlite3.dbapi2 import IntegrityError
+from collections import namedtuple
 #%%
 class unit():
 
@@ -82,15 +83,29 @@ for object in map_objects_to_parse:
     map_objects.append(map_object(name,value))
 
 # %%
+html = urlopen("https://heroes.thelazy.net/index.php/List_of_artifacts_(HotA)")
+bs = BeautifulSoup(html.read(),'lxml')
 
+Artifact = namedtuple('Artifact',['Name','Class'])
+artifacts = []
+   
+for data in bs.tr.next_siblings:
+    if data != '\n':
+        art_name = data.find_all('td')[0].find_all('a')[1].text.strip()
+        art_class = data.find_all('td')[2].text.strip()
+        art = Artifact(art_name,art_class)
+        artifacts.append(art) 
+
+
+#%%
 connection = sqlite3.connect('data.db')
-
 cursor = connection.cursor()
 
 #%%
 #cursor.execute('''CREATE TABLE objects (name VARCHAR(20) PRIMARY KEY, value INT)''')
-cursor.execute('''CREATE TABLE units (name VARCHAR(20) PRIMARY KEY, level INT, Attack INT, Defense INT, minDamage INT, maxDamage INT, Health INT, Speed INT, Growth INT, Value INT)''')
+#cursor.execute('''CREATE TABLE units (name VARCHAR(20) PRIMARY KEY, level INT, Attack INT, Defense INT, minDamage INT, maxDamage INT, Health INT, Speed INT, Growth INT, Value INT)''')
 
+cursor.execute('''CREATE TABLE artifacts (name VARCHAR(20) PRIMARY KEY, class VARCHAR(20), Value INT)''')
 # %%
 query = 'INSERT INTO objects VALUES (?,?)'
 for object in map_objects:
@@ -117,6 +132,14 @@ for unit in units:
     growth = unit.growth
     value = unit.ai_value
     cursor.execute(query,(name,level,attack,defense,mindmg,maxdmg,health,speed,growth,value))
+connection.commit()
+
+#%%
+query = 'INSERT INTO artifacts VALUES (?,?,?)'
+values = {'Treasure':2000,'Minor':5000,'Major':10000,'Relic':20000}
+
+for art in artifacts:
+    cursor.execute(query,(art.Name,art.Class,values[art.Class]))
 connection.commit()
 #%%
 cursor.execute('SELECT name from units')
