@@ -5,28 +5,30 @@ import re
 import sqlite3
 from sqlite3.dbapi2 import IntegrityError
 from collections import namedtuple
+import itertools
 #%%
 class unit():
 
     def __init__(self, scrapped_info):
-        data = []
+        cells = []
         for element in scrapped_info.find_all('td'):
-            if element.text != '':
-                data.append(element.text.strip())
-        self.name = data[0]
-        self.level = data[1]
-        self.attack = data[2]
-        self.defense = data[3]
-        self.min_dmg = data[4]
-        self.max_dmg = data[5]
-        self.health = data[6]
-        self.speed = data[7]
-        self.growth = data[8]
-        self.ai_value = data[9]
+            cells.append(element)
+        self.name = cells[0].text.strip()
+        self.type = cells[1].a['title']
+        self.level = cells[2].text.strip()
+        self.attack = cells[3].text.strip()
+        self.defense = cells[4].text.strip()
+        self.min_dmg = cells[5].text.strip()
+        self.max_dmg = cells[6].text.strip()
+        self.health = cells[7].text.strip()
+        self.speed = cells[8].text.strip()
+        self.growth = cells[9].text.strip()
+        self.ai_value = cells[10].text.strip()
     
     def __str__(self):
         to_print = ""
         to_print += 'Name: ' + self.name + '\n'
+        to_print += 'Type: ' + self.type + '\n'
         to_print += 'Level: ' + self.level + '\n'
         to_print += 'Attack: ' + self.attack + '\n'
         to_print += 'Defense: '+ self.defense + '\n'
@@ -96,16 +98,34 @@ for data in bs.tr.next_siblings:
         art = Artifact(art_name,art_class)
         artifacts.append(art) 
 
+#%%
+html = urlopen("https://heroes.thelazy.net/index.php/External_dwellings_table_(HotA)")
+bs = BeautifulSoup(html.read(),'lxml')
 
+Dwelling = namedtuple('Dwelling',['Name','Creature','Level','Growth','Type'])
+dwellings =[]
+for data in itertools.islice(bs.tr.next_siblings,2,None):
+    if data !='\n':
+        type = data.contents[1].a['title']
+        name = data.contents[3].text
+        creature = data.contents[7].a.attrs['title']
+        level = data.contents[9].text
+        growth = data.contents[11].text[1:]
+        dwelling = Dwelling(name,creature,level,growth,type)
+        dwellings.append(dwelling)
+
+#dwellings.pop(-6) ## del second Golem Factory
 #%%
 connection = sqlite3.connect('data.db')
 cursor = connection.cursor()
 
 #%%
 #cursor.execute('''CREATE TABLE objects (name VARCHAR(20) PRIMARY KEY, value INT)''')
-#cursor.execute('''CREATE TABLE units (name VARCHAR(20) PRIMARY KEY, level INT, Attack INT, Defense INT, minDamage INT, maxDamage INT, Health INT, Speed INT, Growth INT, Value INT)''')
+#cursor.execute('''CREATE TABLE units (name VARCHAR(20) PRIMARY KEY, type VARCHAR(20), level INT, Attack INT, Defense INT, minDamage INT, maxDamage INT, Health INT, Speed INT, Growth INT, Value INT)''')
 
-cursor.execute('''CREATE TABLE artifacts (name VARCHAR(20) PRIMARY KEY, class VARCHAR(20), Value INT)''')
+#cursor.execute('''CREATE TABLE artifacts (name VARCHAR(20) PRIMARY KEY, class VARCHAR(20), Value INT)''')
+
+cursor.execute('''CREATE TABLE dwellings (name VARCHAR(20), creature VARCHAR(20), level INT, growth INT, type VARCHAR(20)) ''')
 # %%
 query = 'INSERT INTO objects VALUES (?,?)'
 for object in map_objects:
@@ -119,9 +139,10 @@ for object in map_objects:
         print(object.name + " already in database")
 connection.commit()
 #%%
-query = 'INSERT INTO units VALUES (?,?,?,?,?,?,?,?,?,?)'
+query = 'INSERT INTO units VALUES (?,?,?,?,?,?,?,?,?,?,?)'
 for unit in units:
     name = unit.name
+    type = unit.type
     level = unit.level
     attack = unit.attack
     defense = unit.defense
@@ -131,7 +152,7 @@ for unit in units:
     speed = unit.speed
     growth = unit.growth
     value = unit.ai_value
-    cursor.execute(query,(name,level,attack,defense,mindmg,maxdmg,health,speed,growth,value))
+    cursor.execute(query,(name,type,level,attack,defense,mindmg,maxdmg,health,speed,growth,value))
 connection.commit()
 
 #%%
@@ -141,8 +162,19 @@ values = {'Treasure':2000,'Minor':5000,'Major':10000,'Relic':20000}
 for art in artifacts:
     cursor.execute(query,(art.Name,art.Class,values[art.Class]))
 connection.commit()
+
 #%%
-cursor.execute('SELECT name from units')
+query = 'INSERT INTO dwellings VALUES (?,?,?,?,?)'
+
+for dwelling in dwellings:
+    try:
+        cursor.execute(query,(dwelling.Name,dwelling.Creature,dwelling.Level,dwelling.Growth,dwelling.Type))
+    except IntegrityError:
+        print(dwelling)
+connection.commit()
+#%%
+#cursor.execute('SELECT name from units')
+cursor.execute('SELECT name,value FROM objects WHERE name LIKE ? or name LIKE ? or name LIKE ?',['Pandora%','Spell%','Prison%'])
 rows = cursor.fetchall()
 print([name[0] for name in rows])
 # %%
